@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#008577">
+    <meta name="description" content="MES 包材计算：本地纯前端计算包材用量、托数与重量范围，数据只保存在本机浏览器。">
+    <title>MES 包材计算</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23008577'/%3E%3Ctext x='32' y='43' font-size='30' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E%E5%8C%85%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="page">
+        <!-- 页头：标题 + 一行说明 -->
+        <header class="page-head">
+            <h1 class="page-title">MES 包材计算</h1>
+            <p class="page-hint">手填批号与产品参数即可计算；结果只保存在本机浏览器，不上传任何服务器。</p>
+        </header>
+
+        <main>
+
+            <!-- 1. 批号与产品 -->
+            <section class="card" data-card="batch">
+                <div class="card-head" data-toggle="batch">
+                    <div class="card-head-left">
+                        <h2 class="card-title">批号与产品</h2>
+                        <span class="hint">手填 · 仅作记录</span>
+                    </div>
+                    <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
+                </div>
+                <div class="card-body">
+                    <div class="field">
+                        <label class="field-label" for="productCode">产品编码</label>
+                        <input class="field-input" id="productCode" name="productCode" type="text" inputmode="numeric"
+                            maxlength="10" autocomplete="off" placeholder="手动输入产品编码">
+                    </div>
+                    <div class="field">
+                        <label class="field-label" for="batchNo">批号</label>
+                        <input class="field-input" id="batchNo" name="batchNo" type="text" maxlength="12"
+                            autocomplete="off" placeholder="完整批号（含 B 单后缀），如 APDD26X1006">
+                    </div>
+                    <p class="product-hint" id="productHint" hidden></p>
+                </div>
+            </section>
+
+            <!-- 2. 分桶件数 -->
+            <section class="card" data-card="buckets">
+                <div class="card-head" data-toggle="buckets">
+                    <div class="card-head-left">
+                        <h2 class="card-title">分桶件数</h2>
+                        <span class="hint">按 A → J 顺序录入</span>
+                    </div>
+                    <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
+                </div>
+                <div class="card-body">
+                    <div class="bucket-grid" id="bucketGrid">
+                        <div class="bucket"><label class="bucket-label" for="bucketA">A桶</label><input class="bucket-input" id="bucketA" data-bucket="A" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketB">B桶</label><input class="bucket-input" id="bucketB" data-bucket="B" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketC">C桶</label><input class="bucket-input" id="bucketC" data-bucket="C" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketD">D桶</label><input class="bucket-input" id="bucketD" data-bucket="D" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketE">E桶</label><input class="bucket-input" id="bucketE" data-bucket="E" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketF">F桶</label><input class="bucket-input" id="bucketF" data-bucket="F" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketG">G桶</label><input class="bucket-input" id="bucketG" data-bucket="G" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketH">H桶</label><input class="bucket-input" id="bucketH" data-bucket="H" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketI">I桶</label><input class="bucket-input" id="bucketI" data-bucket="I" type="text" inputmode="numeric" placeholder="0"></div>
+                        <div class="bucket"><label class="bucket-label" for="bucketJ">J桶</label><input class="bucket-input" id="bucketJ" data-bucket="J" type="text" inputmode="numeric" placeholder="0"></div>
+                    </div>
+                    <div class="tail-grid">
+                        <div class="tail-cell">
+                            <label class="tail-label" for="zeroCount">零箱（瓶）</label>
+                            <input class="tail-input" id="zeroCount" name="zeroCount" type="text" inputmode="numeric" placeholder="0">
+                        </div>
+                        <div class="tail-cell">
+                            <label class="tail-label" for="perCase">瓶 / 件</label>
+                            <input class="tail-input" id="perCase" name="perCase" type="text" inputmode="numeric" minlength="1" placeholder="请选择">
+                        </div>
+                        <div class="tail-cell">
+                            <label class="tail-label" for="perPallet">件 / 托</label>
+                            <input class="tail-input" id="perPallet" name="perPallet" type="text" inputmode="numeric" minlength="1" placeholder="请选择">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. 生产数据（自动结果只读 + 取样输入） -->
+            <section class="card" data-card="prod">
+                <div class="card-head" data-toggle="prod">
+                    <div class="card-head-left">
+                        <h2 class="card-title">生产数据</h2>
+                        <span class="hint">自动结果只读</span>
+                    </div>
+                    <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
+                </div>
+                <div class="card-body">
+                    <div class="data-grid">
+                        <div class="data-cell">
+                            <span class="cell-label">入库瓶数</span>
+                            <span class="cell-value" id="inboundCount"><span class="cell-num">0</span><span class="cell-unit">瓶</span></span>
+                        </div>
+                        <div class="data-cell">
+                            <label class="cell-label" for="sampleCount">取样数（瓶）</label>
+                            <input class="cell-input" id="sampleCount" name="sampleCount" type="text" inputmode="numeric" placeholder="0">
+                        </div>
+                        <div class="data-cell">
+                            <span class="cell-label">领用内包数</span>
+                            <span class="cell-value" id="innerIssued"><span class="cell-num">0</span><span class="cell-unit">瓶</span></span>
+                        </div>
+                        <div class="data-cell">
+                            <span class="cell-label">桶数</span>
+                            <span class="cell-value" id="bucketCount"><span class="cell-num">0</span></span>
+                        </div>
+                        <div class="data-cell">
+                            <span class="cell-label">入库数</span>
+                            <span class="cell-value" id="caseCountText"><span class="cell-num">0</span></span>
+                        </div>
+                        <div class="data-cell">
+                            <span class="cell-label">托码</span>
+                            <span class="cell-value" id="palletCode"><span class="cell-num">0</span><span class="cell-unit">托</span></span>
+                        </div>
+                    </div>
+
+                    <div class="status-row">
+                        <span class="status-label">本批状态</span>
+                        <div class="status-options" id="statusOptions" role="group" aria-label="本批状态">
+                            <button class="status-item active" type="button" data-status="incomplete">未完成</button>
+                            <button class="status-item" type="button" data-status="complete">已完成</button>
+                        </div>
+                    </div>
+
+                    <p class="sync-line">结果保存在本机浏览器（localStorage），不上传</p>
+
+                    <div class="action-row">
+                        <button class="act primary" id="btnSave" type="button">保存</button>
+                        <button class="act secondary" id="btnHistory" type="button">历史</button>
+                        <button class="act danger" id="btnClear" type="button">清空</button>
+                    </div>
+                    <div class="tool-row">
+                        <button class="tool-btn" id="btnCopy" type="button">复制结果</button>
+                        <button class="tool-btn" id="btnExport" type="button">导出 CSV</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. 包材卡片 -->
+            <section class="card" data-card="material">
+                <div class="card-head" data-toggle="material">
+                    <div class="card-head-left">
+                        <h2 class="card-title">包材卡片</h2>
+                        <span class="chip">实用自动</span>
+                    </div>
+                    <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
+                </div>
+                <div class="card-body">
+                    <div class="addon-grid">
+                        <div class="addon-cell">
+                            <label class="addon-label" for="labelExtra">标签追加（张）</label>
+                            <input class="addon-input" id="labelExtra" name="labelExtra" type="text" inputmode="numeric" placeholder="0">
+                        </div>
+                        <div class="addon-cell">
+                            <label class="addon-label" for="securityExtra">防伪追加（张）</label>
+                            <input class="addon-input" id="securityExtra" name="securityExtra" type="text" inputmode="numeric" placeholder="0">
+                        </div>
+                    </div>
+                    <div class="table" id="materialTable">
+                        <div class="tr head">
+                            <span class="th name">包材</span>
+                            <span class="th num">领用</span>
+                            <span class="th num">实用</span>
+                            <span class="th num">损耗</span>
+                            <span class="th num">退回</span>
+                        </div>
+                        <div class="tr" data-material="标签">
+                            <span class="td name">标签</span>
+                            <span class="td num"><input class="cell-input" data-input="issued" data-material="标签" type="text" inputmode="numeric" placeholder="0" aria-label="标签领用"></span>
+                            <span class="td num used"><span class="used-text" data-used="标签">0</span></span>
+                            <span class="td num"><input class="cell-input" data-input="loss" data-material="标签" type="text" inputmode="numeric" placeholder="0" aria-label="标签损耗"></span>
+                            <span class="td num"><input class="cell-input" data-input="returned" data-material="标签" type="text" inputmode="numeric" placeholder="0" aria-label="标签退回"></span>
+                        </div>
+                        <div class="tr" data-material="唛头">
+                            <span class="td name">唛头</span>
+                            <span class="td num"><input class="cell-input" data-input="issued" data-material="唛头" type="text" inputmode="numeric" placeholder="0" aria-label="唛头领用"></span>
+                            <span class="td num used"><span class="used-text" data-used="唛头">0</span></span>
+                            <span class="td num"><input class="cell-input" data-input="loss" data-material="唛头" type="text" inputmode="numeric" placeholder="0" aria-label="唛头损耗"></span>
+                            <span class="td num"><input class="cell-input" data-input="returned" data-material="唛头" type="text" inputmode="numeric" placeholder="0" aria-label="唛头退回"></span>
+                        </div>
+                        <div class="tr" data-material="纸箱">
+                            <span class="td name">纸箱</span>
+                            <span class="td num"><input class="cell-input" data-input="issued" data-material="纸箱" type="text" inputmode="numeric" placeholder="0" aria-label="纸箱领用"></span>
+                            <span class="td num used"><span class="used-text" data-used="纸箱">0</span></span>
+                            <span class="td num"><input class="cell-input" data-input="loss" data-material="纸箱" type="text" inputmode="numeric" placeholder="0" aria-label="纸箱损耗"></span>
+                            <span class="td num"><input class="cell-input" data-input="returned" data-material="纸箱" type="text" inputmode="numeric" placeholder="0" aria-label="纸箱退回"></span>
+                        </div>
+                        <div class="tr" data-material="防伪">
+                            <span class="td name">防伪</span>
+                            <span class="td num"><input class="cell-input" data-input="issued" data-material="防伪" type="text" inputmode="numeric" placeholder="0" aria-label="防伪领用"></span>
+                            <span class="td num used"><span class="used-text" data-used="防伪">0</span></span>
+                            <span class="td num"><input class="cell-input" data-input="loss" data-material="防伪" type="text" inputmode="numeric" placeholder="0" aria-label="防伪损耗"></span>
+                            <span class="td num"><input class="cell-input" data-input="returned" data-material="防伪" type="text" inputmode="numeric" placeholder="0" aria-label="防伪退回"></span>
+                        </div>
+                    </div>
+                    <p class="note">实用数按生产数据自动计算；领用、损耗、退回填写任意两项。</p>
+                </div>
+            </section>
+
+            <!-- 5. 重量参数 -->
+            <section class="card" data-card="weight">
+                <div class="card-head" data-toggle="weight">
+                    <div class="card-head-left">
+                        <h2 class="card-title">重量参数</h2>
+                        <span class="chip" id="weightProductChip">未选择产品</span>
+                    </div>
+                    <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
+                </div>
+                <div class="card-body">
+                    <div class="weight-grid">
+                        <div class="data-cell">
+                            <label class="cell-label" for="boxNetWeight">单箱净重（kg）</label>
+                            <input class="data-input" id="boxNetWeight" name="boxNetWeight" type="text" inputmode="decimal" placeholder="0.000">
+                        </div>
+                        <div class="data-cell">
+                            <label class="cell-label" for="bottleWeight">单瓶重量（kg）</label>
+                            <input class="data-input" id="bottleWeight" name="bottleWeight" type="text" inputmode="decimal" placeholder="0.000">
+                        </div>
+                        <div class="data-cell weight-result">
+                            <span class="cell-label">重量范围</span>
+                            <span class="weight-value" id="weightRange">—</span>
+                        </div>
+                        <div class="data-cell">
+                            <label class="cell-label" for="bottleWeightMin">单瓶最低（kg）</label>
+                            <input class="data-input" id="bottleWeightMin" name="bottleWeightMin" type="text" inputmode="decimal" placeholder="0.000">
+                        </div>
+                        <div class="data-cell">
+                            <label class="cell-label" for="boxNetWeightMin">单箱净重最低（kg）</label>
+                            <input class="data-input" id="boxNetWeightMin" name="boxNetWeightMin" type="text" inputmode="decimal" placeholder="0.000">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. 托分页 -->
+            <section class="card" data-card="pallet">
+                <div class="card-head" data-toggle="pallet">
+                    <div class="card-head-left">
+                        <h2 class="card-title">托分页</h2>
+                        <span class="chip" id="palletPageChip">第 1 托 / 共 1 托</span>
+                    </div>
+                    <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
+                </div>
+                <div class="card-body">
+                    <div class="pager-summary">
+                        <span>件号</span>
+                        <strong id="palletRange">暂无件号</strong>
+                    </div>
+                    <div class="pager-summary" id="zeroBoxRow" hidden>
+                        <span>零箱</span>
+                        <strong id="zeroBoxInfo"></strong>
+                    </div>
+                    <div class="pager-actions">
+                        <button class="btn" type="button" data-go="first">首托</button>
+                        <button class="btn" type="button" data-go="prev">上一托</button>
+                        <button class="btn primary" type="button" data-go="next">下一托</button>
+                        <button class="btn" type="button" data-go="last">尾托</button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="page-foot">
+            <p>MES 生产助手 · 包材计算单页版 · 纯前端本地计算</p>
+        </footer>
+    </div>
+
+    <!-- 历史记录弹层 -->
+    <div class="mask" id="historyMask" hidden>
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+            <div class="sheet-head">
+                <h2 class="sheet-title" id="historyTitle">历史记录</h2>
+                <button class="sheet-close" id="historyClose" type="button">关闭</button>
+            </div>
+            <div class="history-list" id="historyList"></div>
+            <div class="sheet-actions">
+                <button class="tool-btn" id="historyClear" type="button">清空历史</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用确认弹层 -->
+    <div class="mask" id="confirmMask" hidden>
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+            <h2 class="dialog-title" id="confirmTitle">确认操作</h2>
+            <p class="dialog-content" id="confirmContent"></p>
+            <div class="dialog-actions">
+                <button class="btn" id="confirmCancel" type="button">取消</button>
+                <button class="btn primary danger" id="confirmOk" type="button">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <noscript>
+        <p class="noscript">此页面需要启用 JavaScript 才能计算包材用量。</p>
+    </noscript>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
