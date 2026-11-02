@@ -829,3 +829,67 @@ function init() {
 }
 
 init()
+
+/* ---------------- PWA：Service Worker 注册 + 安装引导 ---------------- */
+
+/** 仅在 HTTPS / localhost 注册 Service Worker；失败静默，不影响计算。 */
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return
+    const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].indexOf(location.hostname) >= 0
+    const isSecure = window.isSecureContext || location.protocol === 'https:' || isLocalhost
+    if (!isSecure) return
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+        // SW 不可用时页面照常计算，不打扰用户
+    })
+}
+
+/**
+ * 轻量安装引导（不占主流程）：
+ * - Chrome/Edge：捕获 beforeinstallprompt 后在页脚显示「安装到桌面」，点击触发安装；appinstalled 后隐藏
+ * - iOS Safari：无该事件，显示一行可关闭的「分享 → 添加到主屏幕」提示（仅 iOS Safari 且未独立运行）
+ */
+function setupInstallPrompt() {
+    const installBox = document.getElementById('pwaInstall')
+    const installButton = document.getElementById('pwaInstallBtn')
+    const iosHint = document.getElementById('pwaIosHint')
+    const iosClose = document.getElementById('pwaIosClose')
+    const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+        window.navigator.standalone === true
+    if (standalone) return
+
+    let deferredPrompt = null
+    if (installBox && installButton) {
+        window.addEventListener('beforeinstallprompt', event => {
+            event.preventDefault()
+            deferredPrompt = event
+            installBox.hidden = false
+        })
+        installButton.addEventListener('click', async () => {
+            if (!deferredPrompt || typeof deferredPrompt.prompt !== 'function') return
+            installBox.hidden = true
+            try {
+                deferredPrompt.prompt()
+                await deferredPrompt.userChoice
+            } catch (error) {
+                // 用户取消安装 / 浏览器拒绝：忽略
+            }
+            deferredPrompt = null
+        })
+        window.addEventListener('appinstalled', () => {
+            installBox.hidden = true
+            deferredPrompt = null
+        })
+    }
+
+    const userAgent = navigator.userAgent || ''
+    const isIos = /iPhone|iPad|iPod/i.test(userAgent)
+    // iOS Safari 不支持 beforeinstallprompt（即「不支持」安装事件），给一行可关闭的添加到主屏幕提示
+    const isIosSafari = isIos && /Safari/i.test(userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(userAgent)
+    if (iosHint && iosClose && isIosSafari) {
+        iosHint.hidden = false
+        iosClose.addEventListener('click', () => { iosHint.hidden = true })
+    }
+}
+
+registerServiceWorker()
+setupInstallPrompt()

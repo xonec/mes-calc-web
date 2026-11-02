@@ -973,3 +973,57 @@ button {
         padding-bottom: calc(48 * var(--u));
     }
 }
+
+
+/* ---------- PWA：页脚安装引导（轻量，不占主流程） ---------- */
+.pwa-install {
+    margin-top: calc(10 * var(--u));
+}
+
+.pwa-install-btn {
+    display: block;
+    margin: 0 auto;
+    min-height: calc(72 * var(--u));
+    line-height: calc(72 * var(--u));
+    padding: 0 calc(24 * var(--u));
+    border-radius: calc(12 * var(--u));
+    font-size: calc(24 * var(--u));
+    font-weight: 600;
+    color: var(--surface);
+    background: var(--primary);
+}
+
+.pwa-install-btn:active {
+    opacity: .86;
+}
+
+.pwa-ios-hint {
+    position: relative;
+    margin: calc(10 * var(--u)) auto 0;
+    max-width: calc(600 * var(--u));
+    padding: calc(10 * var(--u)) calc(40 * var(--u)) calc(10 * var(--u)) calc(14 * var(--u));
+    border: 1px solid var(--line);
+    border-radius: calc(12 * var(--u));
+    background: var(--surface);
+    text-align: left;
+}
+
+.pwa-ios-text {
+    margin: 0;
+    font-size: calc(22 * var(--u));
+    line-height: 1.5;
+    color: var(--muted);
+}
+
+.pwa-ios-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: calc(64 * var(--u));
+    height: calc(64 * var(--u));
+    padding: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: calc(30 * var(--u));
+    line-height: 1;
+}

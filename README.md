@@ -18,12 +18,15 @@ python3 -m http.server 8080
 
 ```
 mes-calc-web/
-├── index.html        # 页面结构（卡片顺序与 App 目标版式一致）
-├── css/style.css     # MES 设计令牌 + 目标版式样式
+├── index.html            # 页面结构（卡片顺序与 App 目标版式一致）+ PWA 元信息
+├── manifest.webmanifest  # PWA 清单（名称/图标/主题色/standalone）
+├── sw.js                 # Service Worker（app shell 预缓存 + 离线回退）
+├── icons/                # PWA 图标（192/512/maskable-512/apple-touch-180，真 PNG）
+├── css/style.css         # MES 设计令牌 + 目标版式样式
 ├── js/
-│   ├── calc.js       # 计算内核：与 mes-uniapp/utils/calc.js 逐字节同一份（computeMaterial / computeWeightRange）
-│   ├── store.js      # localStorage：历史记录、可选本地产品参数
-│   └── app.js        # 页面状态、渲染、保存/历史/复制/导出
+│   ├── calc.js           # 计算内核：与 mes-uniapp/utils/calc.js 逐字节同一份（computeMaterial / computeWeightRange）
+│   ├── store.js          # localStorage：历史记录、可选本地产品参数
+│   └── app.js            # 页面状态、渲染、保存/历史/复制/导出 + SW 注册/安装引导
 └── README.md
 ```
 
@@ -91,6 +94,35 @@ mes-calc-web/
   - 包材「实用」列 0 值用 `--muted`，>0 才用主色系（`--primary-ink`）
   - 复制结果 / 导出 CSV 改白底 + 1px `#E3E8E5` 描边（原先 `#F2F4F3` 底与卡底仅 1.04:1）
   - 「瓶 / 件」「件 / 托」占位符为 `0`（不再写「请选择」误导为选择器），卡头 hint 注明「填数字、点格子任意位置即可输入」
+
+## PWA 安装与离线
+
+已按可安装 PWA 配置（`manifest.webmanifest` + `sw.js` + 192/512 与 maskable 图标），支持安装到桌面/主屏幕，断网可继续计算与读取本地历史。
+
+### 安装
+
+- **Chrome / Edge（桌面与 Android）**：满足安装条件时，页脚会出现「安装到桌面」按钮（来自 `beforeinstallprompt`，不占主流程）；也可以直接用地址栏的安装图标。安装完成后按钮自动隐藏。
+- **iOS / iPadOS Safari**：无 `beforeinstallprompt`，页面会显示一行可关闭的提示「点 Safari 底部分享按钮 →「添加到主屏幕」」。
+- 已安装（`display-mode: standalone`）或独立运行时不显示任何安装引导。
+
+### 离线能力
+
+`sw.js` 策略（改版时**手动改 `CACHE_VERSION`**，例如 `v1` → `v2`，`activate` 会清理旧版本缓存）：
+
+| 请求 | 策略 |
+| --- | --- |
+| 安装/激活 | 预缓存 app shell：`./`、`index.html`、`css/style.css`、`js/app.js`、`js/calc.js`、`js/store.js`、`manifest.webmanifest`、4 个图标；`activate` 删除旧缓存并 `clients.claim()` |
+| 导航（打开页面） | network-first，失败回退缓存的 `index.html`（断网仍能打开） |
+| 其他同源 GET（CSS/JS/图标/manifest） | cache-first，缺失时请求并回填缓存 |
+| 跨域 / 非 GET | 直接放行，不缓存、不产生额外请求 |
+
+因此首次在线访问后断网，重新打开页面仍可计算、可读写 `localStorage` 历史；页面不发任何外部请求。
+
+### 部署要求
+
+- **HTTPS**（或 `localhost`）才能注册 Service Worker / 安装；`file://` 直开不可用。
+- 托管需为 `.webmanifest` 返回 `application/manifest+json`（GitHub Pages 可直接用；国内托管若返回 `application/octet-stream`，需在 Nginx/对象存储里补 MIME）。
+- 部署在子路径（如 `/mes-calc-web/`）或域名根都可：`start_url`/`scope` 为相对 `./`，SW 以自身目录为 scope。
 
 ## 数据与隐私
 
