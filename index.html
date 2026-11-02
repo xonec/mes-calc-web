@@ -50,36 +50,36 @@
                 <div class="card-head" data-toggle="buckets">
                     <div class="card-head-left">
                         <h2 class="card-title">分桶件数</h2>
-                        <span class="hint">按 A → J 顺序录入</span>
+                        <span class="hint">按 A → J 顺序录入；瓶/件、件/托填数字，点格子任意位置即可输入</span>
                     </div>
                     <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
                 </div>
                 <div class="card-body">
                     <div class="bucket-grid" id="bucketGrid">
-                        <div class="bucket"><label class="bucket-label" for="bucketA">A桶</label><input class="bucket-input" id="bucketA" data-bucket="A" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketB">B桶</label><input class="bucket-input" id="bucketB" data-bucket="B" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketC">C桶</label><input class="bucket-input" id="bucketC" data-bucket="C" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketD">D桶</label><input class="bucket-input" id="bucketD" data-bucket="D" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketE">E桶</label><input class="bucket-input" id="bucketE" data-bucket="E" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketF">F桶</label><input class="bucket-input" id="bucketF" data-bucket="F" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketG">G桶</label><input class="bucket-input" id="bucketG" data-bucket="G" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketH">H桶</label><input class="bucket-input" id="bucketH" data-bucket="H" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketI">I桶</label><input class="bucket-input" id="bucketI" data-bucket="I" type="text" inputmode="numeric" placeholder="0"></div>
-                        <div class="bucket"><label class="bucket-label" for="bucketJ">J桶</label><input class="bucket-input" id="bucketJ" data-bucket="J" type="text" inputmode="numeric" placeholder="0"></div>
+                        <label class="bucket"><span class="bucket-label">A桶</span><input class="bucket-input" id="bucketA" data-bucket="A" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">B桶</span><input class="bucket-input" id="bucketB" data-bucket="B" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">C桶</span><input class="bucket-input" id="bucketC" data-bucket="C" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">D桶</span><input class="bucket-input" id="bucketD" data-bucket="D" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">E桶</span><input class="bucket-input" id="bucketE" data-bucket="E" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">F桶</span><input class="bucket-input" id="bucketF" data-bucket="F" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">G桶</span><input class="bucket-input" id="bucketG" data-bucket="G" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">H桶</span><input class="bucket-input" id="bucketH" data-bucket="H" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">I桶</span><input class="bucket-input" id="bucketI" data-bucket="I" type="text" inputmode="numeric" placeholder="0"></label>
+                        <label class="bucket"><span class="bucket-label">J桶</span><input class="bucket-input" id="bucketJ" data-bucket="J" type="text" inputmode="numeric" placeholder="0"></label>
                     </div>
                     <div class="tail-grid">
-                        <div class="tail-cell">
-                            <label class="tail-label" for="zeroCount">零箱（瓶）</label>
+                        <label class="tail-cell">
+                            <span class="tail-label">零箱（瓶）</span>
                             <input class="tail-input" id="zeroCount" name="zeroCount" type="text" inputmode="numeric" placeholder="0">
-                        </div>
-                        <div class="tail-cell">
-                            <label class="tail-label" for="perCase">瓶 / 件</label>
-                            <input class="tail-input" id="perCase" name="perCase" type="text" inputmode="numeric" minlength="1" placeholder="请选择">
-                        </div>
-                        <div class="tail-cell">
-                            <label class="tail-label" for="perPallet">件 / 托</label>
-                            <input class="tail-input" id="perPallet" name="perPallet" type="text" inputmode="numeric" minlength="1" placeholder="请选择">
-                        </div>
+                        </label>
+                        <label class="tail-cell">
+                            <span class="tail-label">瓶 / 件</span>
+                            <input class="tail-input" id="perCase" name="perCase" type="text" inputmode="numeric" placeholder="0">
+                        </label>
+                        <label class="tail-cell">
+                            <span class="tail-label">件 / 托</span>
+                            <input class="tail-input" id="perPallet" name="perPallet" type="text" inputmode="numeric" placeholder="0">
+                        </label>
                     </div>
                 </div>
             </section>

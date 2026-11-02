@@ -112,33 +112,60 @@ function sanitizeProductCode(value) {
     return String(value == null ? '' : value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)
 }
 
-/** 只读值拆「数字 + 单位/补充」，与 App 生产数据格一致（数字 44rpx、单位 26rpx）。 */
-function splitValue(value) {
-    const text = String(value == null ? '' : value).trim()
-    const match = text.match(/^([0-9]+(?:\.[0-9]+)?)([\s\S]*)$/)
-    if (!match) return { main: text, unit: '' }
-    return { main: match[1], unit: match[2].trim() }
-}
-
 function isZeroValue(value) {
     const text = String(value == null ? '' : value).trim()
     return text === '0' || /^0(?:\s|$)/.test(text)
 }
 
+/** 统一写法「数字 空格 单位」：把「5925瓶」补成「5925 瓶」，并归一多余空白。 */
+function normalizeDisplayValue(value) {
+    return String(value == null ? '' : value)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/([0-9])(?=[^\d\s])/g, '$1 ')
+        .replace(/([^\d\s])(?=[0-9])/g, '$1 ')
+}
+
+/**
+ * 只读值分段渲染（口径与 App 目标版式一致）：
+ * - 每个「数字 + 单位」是一段：数字 44u 主色、单位 26u muted；
+ * - 段内不拆行，只在 + 处分行（复合值第 2/3 个数字不再被并成小字）；
+ * - 0 值整体用 muted。
+ */
 function renderValue(node, value) {
     if (!node) return
-    const parts = splitValue(value)
-    const num = document.createElement('span')
-    num.className = 'cell-num'
-    num.textContent = parts.main
-    node.replaceChildren(num)
-    if (parts.unit) {
-        const unit = document.createElement('span')
-        unit.className = 'cell-unit'
-        unit.textContent = parts.unit
-        node.appendChild(unit)
-    }
-    node.classList.toggle('zero', isZeroValue(value) || parts.main === '')
+    node.replaceChildren()
+    const text = normalizeDisplayValue(value)
+    node.classList.toggle('zero', !text || isZeroValue(value))
+    if (!text) return
+    text.split(/\s*\+\s*/).forEach((segmentText, index) => {
+        if (index > 0) {
+            const op = document.createElement('span')
+            op.className = 'cell-op'
+            op.textContent = ' + '
+            node.appendChild(op)
+        }
+        const segment = document.createElement('span')
+        segment.className = 'cell-seg'
+        const match = segmentText.trim().match(/^([0-9]+(?:\.[0-9]+)?)\s*([\s\S]*)$/)
+        if (!match) {
+            segment.textContent = segmentText.trim()
+            node.appendChild(segment)
+            return
+        }
+        const num = document.createElement('span')
+        num.className = 'cell-num'
+        num.textContent = match[1]
+        segment.appendChild(num)
+        const unitText = match[2].trim()
+        if (unitText) {
+            const unit = document.createElement('span')
+            unit.className = 'cell-unit'
+            unit.textContent = ' ' + unitText
+            segment.appendChild(unit)
+        }
+        node.appendChild(segment)
+    })
 }
 
 function formatTime(iso) {
@@ -229,7 +256,10 @@ function render() {
     state.materials.forEach(material => { usedByName[material.name] = material.used })
     el.usedTexts.forEach(node => {
         const name = node.getAttribute('data-used')
-        node.textContent = usedByName[name] == null ? '0' : String(usedByName[name])
+        const used = usedByName[name]
+        node.textContent = used == null ? '0' : String(used)
+        // P2-1：实用列 0 值弱化为 muted，>0 才用主色
+        node.classList.toggle('zero-value', !used)
     })
 
     // 本批状态

@@ -12,6 +12,7 @@
 :root {
     /* 颜色令牌（与 mes-uniapp/uni.scss 一致） */
     --primary: #008577;
+    --primary-ink: #0B7263; /* #E6F4F1 底上的主色小字：5.16:1 */
     --primary-soft: #E6F4F1;
     --muted: #5F6A65;
     --line: #E3E8E5;
@@ -153,7 +154,7 @@ button {
     margin-left: calc(12 * var(--u));
     font-size: calc(22 * var(--u));
     line-height: 1.4;
-    color: var(--primary);
+    color: var(--primary-ink);
     background: var(--primary-soft);
     padding: calc(4 * var(--u)) calc(10 * var(--u));
     border-radius: calc(8 * var(--u));
@@ -227,7 +228,7 @@ button {
     margin: calc(10 * var(--u)) 0 0;
     font-size: calc(22 * var(--u));
     line-height: 1.5;
-    color: var(--primary);
+    color: var(--primary-ink);
     background: var(--primary-soft);
     border-radius: calc(8 * var(--u));
     padding: calc(8 * var(--u)) calc(12 * var(--u));
@@ -263,9 +264,11 @@ button {
 
 .bucket-input {
     width: 100%;
-    height: calc(56 * var(--u));
-    margin-top: calc(2 * var(--u));
-    padding: 0;
+    /* 可点高度 56u→88u（390 下 45.8px ≥44px）：负 margin + 上下内距抵消，
+       文字位置与格高（112u）不变，热区向 label/内距延伸 */
+    height: calc(88 * var(--u));
+    margin: calc(-16 * var(--u)) 0 calc(-8.5 * var(--u));
+    padding: calc(16 * var(--u)) 0;
     font-size: calc(32 * var(--u));
     font-weight: 600;
     text-align: center;
@@ -283,8 +286,8 @@ button {
     flex: 1 1 0;
     min-width: 0;
     margin: 0 calc(4 * var(--u));
-    min-height: calc(96 * var(--u));
-    padding: calc(10 * var(--u)) calc(8 * var(--u));
+    min-height: calc(112 * var(--u));
+    padding: calc(8 * var(--u));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -302,9 +305,9 @@ button {
 
 .tail-input {
     width: 100%;
-    height: calc(56 * var(--u));
-    margin-top: calc(2 * var(--u));
-    padding: 0;
+    height: calc(88 * var(--u));
+    margin: calc(-16 * var(--u)) 0 calc(-8.5 * var(--u));
+    padding: calc(16 * var(--u)) 0;
     font-size: calc(32 * var(--u));
     font-weight: 600;
     text-align: center;
@@ -318,6 +321,10 @@ button {
     display: flex;
     flex-wrap: wrap;
     margin: 0 calc(-4 * var(--u));
+}
+
+.data-grid .data-cell {
+    justify-content: flex-start;
 }
 
 .data-cell {
@@ -345,19 +352,36 @@ button {
     display: block;
     min-width: 0;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.3;
     color: var(--primary);
-    overflow-wrap: anywhere;
+}
+
+/* 复合值按「段（数字+单位）」排：每段不拆行，只在 + 处换行 */
+.cell-seg {
+    display: inline-block;
+    white-space: nowrap;
 }
 
 .cell-num {
     font-size: calc(44 * var(--u));
+    color: inherit;
 }
 
 .cell-unit {
-    margin-left: calc(4 * var(--u));
     font-size: calc(26 * var(--u));
     font-weight: 600;
+    color: var(--muted);
+}
+
+.cell-op {
+    font-size: calc(26 * var(--u));
+    font-weight: 600;
+    color: var(--muted);
+}
+
+/* 段内空白按文本渲染，允许在「+」两侧换行 */
+.cell-value {
+    white-space: normal;
 }
 
 .cell-value.zero {
@@ -483,7 +507,8 @@ button {
     font-size: calc(24 * var(--u));
     font-weight: 600;
     color: var(--ink);
-    background: var(--canvas);
+    background: var(--surface);
+    border: 1px solid var(--line);
 }
 
 .tool-btn + .tool-btn {
@@ -597,7 +622,12 @@ button {
 .used-text {
     font-size: calc(28 * var(--u));
     font-weight: 600;
-    color: var(--primary);
+    color: var(--primary-ink);
+}
+
+/* P2-1：实用列 0 值弱化为 muted（>0 才主色） */
+.used-text.zero-value {
+    color: var(--muted);
 }
 
 .note {
@@ -644,7 +674,7 @@ button {
     font-size: calc(32 * var(--u));
     font-weight: 700;
     line-height: 1.3;
-    color: var(--primary);
+    color: var(--primary-ink);
     overflow-wrap: anywhere;
 }
 
@@ -687,7 +717,7 @@ button {
     border-radius: calc(16 * var(--u));
     font-size: calc(28 * var(--u));
     font-weight: 600;
-    color: var(--primary);
+    color: var(--primary-ink);
     background: var(--primary-soft);
 }
 
@@ -841,7 +871,7 @@ button {
 
 .history-actions .load {
     background: var(--primary-soft);
-    color: var(--primary);
+    color: var(--primary-ink);
 }
 
 .history-actions .remove {
