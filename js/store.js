@@ -1,11 +1,8 @@
-// 本地存储：历史记录 + 产品参数（localStorage，仅保存在本机浏览器，不上传）
-// 说明：历史按「批号」去重（同一批号再次保存覆盖旧记录），最多保留 50 条；
-//      产品参数按产品编码索引，用于「可选本地产品参数」自动回填（最多 100 条）。
+// 本地存储：历史记录（localStorage，仅保存在本机浏览器，不上传）
+// 说明：历史按「批号」去重（同一批号再次保存覆盖旧记录），最多保留 50 条。
 
 const RECORDS_KEY = 'mes-calc-web:records:v1'
-const PRODUCTS_KEY = 'mes-calc-web:products:v1'
 const MAX_RECORDS = 50
-const MAX_PRODUCTS = 100
 
 function readJSON(key, fallback) {
     try {
@@ -60,31 +57,4 @@ export function clearRecords() {
         /* ignore */
     }
     return []
-}
-
-/* ---------------- 产品参数（可选本地档案） ---------------- */
-
-export function loadProducts() {
-    const list = readJSON(PRODUCTS_KEY, [])
-    return Array.isArray(list) ? list.filter(item => item && item.code) : []
-}
-
-export function findProduct(code) {
-    const target = String(code || '').trim()
-    if (!target) return null
-    return loadProducts().find(item => item.code === target) || null
-}
-
-/** 保存/更新一个产品的计算参数（编码、瓶/件、件/托、更新时间）。 */
-export function saveProduct(product) {
-    const code = String((product && product.code) || '').trim()
-    if (!code) return
-    const list = loadProducts().filter(item => item.code !== code)
-    const next = [{
-        code,
-        perCase: Number(product.perCase) || 0,
-        perPallet: Number(product.perPallet) || 0,
-        updatedAt: new Date().toISOString()
-    }, ...list].slice(0, MAX_PRODUCTS)
-    writeJSON(PRODUCTS_KEY, next)
 }

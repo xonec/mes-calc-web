@@ -19,35 +19,26 @@
 
 <body>
     <div class="page">
-        <!-- 页头：标题 + 一行说明 -->
-        <header class="page-head">
-            <h1 class="page-title">MES 包材计算</h1>
-            <p class="page-hint">手填批号与产品参数即可计算；结果只保存在本机浏览器，不上传任何服务器。</p>
-        </header>
-
         <main>
 
-            <!-- 1. 批号与产品 -->
+            <!-- 1. 批号（手填或扫码，仅作记录） -->
             <section class="card" data-card="batch">
                 <div class="card-head" data-toggle="batch">
                     <div class="card-head-left">
-                        <h2 class="card-title">批号与产品</h2>
-                        <span class="hint">手填 · 仅作记录</span>
+                        <h2 class="card-title">批号</h2>
+                        <span class="hint">手填或扫码 · 仅作记录</span>
                     </div>
                     <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
                 </div>
                 <div class="card-body">
                     <div class="field">
-                        <label class="field-label" for="productCode">产品编码</label>
-                        <input class="field-input" id="productCode" name="productCode" type="text" inputmode="numeric"
-                            maxlength="10" autocomplete="off" placeholder="手动输入产品编码">
-                    </div>
-                    <div class="field">
                         <label class="field-label" for="batchNo">批号</label>
-                        <input class="field-input" id="batchNo" name="batchNo" type="text" maxlength="12"
-                            autocomplete="off" placeholder="完整批号（含 B 单后缀），如 APDD26X1006">
+                        <div class="batch-input-row">
+                            <input class="field-input" id="batchNo" name="batchNo" type="text" maxlength="12"
+                                autocomplete="off" placeholder="完整批号（含 B 单后缀），如 APDD26X1006">
+                            <button class="scan-btn" id="btnScan" type="button">扫码</button>
+                        </div>
                     </div>
-                    <p class="product-hint" id="productHint" hidden></p>
                 </div>
             </section>
 
@@ -124,14 +115,6 @@
                         <div class="data-cell">
                             <span class="cell-label">托码</span>
                             <span class="cell-value" id="palletCode"><span class="cell-num">0</span><span class="cell-unit">托</span></span>
-                        </div>
-                    </div>
-
-                    <div class="status-row">
-                        <span class="status-label">本批状态</span>
-                        <div class="status-options" id="statusOptions" role="group" aria-label="本批状态">
-                            <button class="status-item active" type="button" data-status="incomplete">未完成</button>
-                            <button class="status-item" type="button" data-status="complete">已完成</button>
                         </div>
                     </div>
 
@@ -215,14 +198,13 @@
                 <div class="card-head" data-toggle="weight">
                     <div class="card-head-left">
                         <h2 class="card-title">重量参数</h2>
-                        <span class="chip" id="weightProductChip">未选择产品</span>
                     </div>
                     <button class="collapse-btn" type="button" aria-label="收起/展开" aria-expanded="true">⌄</button>
                 </div>
                 <div class="card-body">
                     <div class="weight-grid">
                         <div class="data-cell">
-                            <label class="cell-label" for="boxNetWeight">单箱净重（kg）</label>
+                            <label class="cell-label" for="boxNetWeight">单箱重量（kg）</label>
                             <input class="data-input" id="boxNetWeight" name="boxNetWeight" type="text" inputmode="decimal" placeholder="0.000">
                         </div>
                         <div class="data-cell">
@@ -232,14 +214,6 @@
                         <div class="data-cell weight-result">
                             <span class="cell-label">重量范围</span>
                             <span class="weight-value" id="weightRange">—</span>
-                        </div>
-                        <div class="data-cell">
-                            <label class="cell-label" for="bottleWeightMin">单瓶最低（kg）</label>
-                            <input class="data-input" id="bottleWeightMin" name="bottleWeightMin" type="text" inputmode="decimal" placeholder="0.000">
-                        </div>
-                        <div class="data-cell">
-                            <label class="cell-label" for="boxNetWeightMin">单箱净重最低（kg）</label>
-                            <input class="data-input" id="boxNetWeightMin" name="boxNetWeightMin" type="text" inputmode="decimal" placeholder="0.000">
                         </div>
                     </div>
                 </div>
@@ -284,6 +258,19 @@
                 <button class="pwa-ios-close" id="pwaIosClose" type="button" aria-label="关闭安装提示">×</button>
             </div>
         </footer>
+    </div>
+
+    <!-- 扫码浮层（相机 + 条码识别） -->
+    <div class="scan-mask" id="scanMask" hidden>
+        <div class="scan-head">
+            <h2 class="scan-title" id="scanTitle">扫描批号条码</h2>
+            <button class="scan-close" id="scanClose" type="button">关闭</button>
+        </div>
+        <div class="scan-view">
+            <video class="scan-video" id="scanVideo" playsinline muted></video>
+            <div class="scan-frame" aria-hidden="true"></div>
+        </div>
+        <p class="scan-hint">将条形码 / 二维码放入取景框，识别成功后自动填入批号</p>
     </div>
 
     <!-- 历史记录弹层 -->

@@ -98,7 +98,7 @@ export function computeMaterial(input) {
     }
 }
 
-// 重量范围：单箱净重 ± 单瓶重量的一半
+// 重量范围：单箱重量 ± 单瓶重量的一半
 export function computeWeightRange(bottleWeight, boxNetWeight) {
     const bottle = Math.max(0, Number(bottleWeight) || 0)
     const box = Math.max(0, Number(boxNetWeight) || 0)

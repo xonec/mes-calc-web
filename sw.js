@@ -5,7 +5,7 @@
 //   - 其他同源 GET：cache-first，缺失时请求并回填缓存
 //   - 只处理同源请求；任何外部资源都不缓存、不拦截
 // 改版时手动改 CACHE_VERSION（v1 → v2 …），activate 会清掉旧版本缓存。
-const CACHE_VERSION = 'v1'
+const CACHE_VERSION = 'v2'
 const CACHE_NAME = 'mes-calc-web-' + CACHE_VERSION
 const SCOPE_ROOT = self.registration.scope
 const INDEX_URL = new URL('index.html', SCOPE_ROOT).href

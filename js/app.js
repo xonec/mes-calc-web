@@ -1,6 +1,6 @@
 // MES 包材计算 · 单页版逻辑
-// 计算内核：js/calc.js（与 mes-uniapp/utils/calc.js 逐字节同一份，公式不做任何修改）
-// 数据：历史记录 / 产品参数只写本机 localStorage，不联网、不登录、不含人员与订单数据。
+// 计算内核：js/calc.js（公式与 mes-uniapp/utils/calc.js 完全一致，仅注释措辞不同）
+// 数据：历史记录只写本机 localStorage，不联网、不登录、不含人员与订单数据。
 
 import { BUCKET_KEYS, computeMaterial, computeWeightRange } from './calc.js'
 import {
@@ -8,9 +8,7 @@ import {
     loadRecords,
     saveRecord,
     removeRecord,
-    clearRecords,
-    findProduct,
-    saveProduct
+    clearRecords
 } from './store.js'
 
 /* ---------------- 状态 ---------------- */
@@ -23,7 +21,6 @@ function emptyBuckets() {
 
 const state = {
     batchNo: '',
-    productCode: '',
     buckets: emptyBuckets(),
     zeroCount: '',
     perCase: '',
@@ -32,10 +29,7 @@ const state = {
     labelExtra: '',
     securityExtra: '',
     bottleWeight: '',
-    bottleWeightMin: '',
     boxNetWeight: '',
-    boxNetWeightMin: '',
-    batchStatus: 'incomplete',
     currentPallet: 1,
     materials: [],
     weightRange: '—',
@@ -48,9 +42,8 @@ const $ = selector => document.querySelector(selector)
 const $$ = selector => Array.from(document.querySelectorAll(selector))
 
 const el = {
-    productCode: $('#productCode'),
     batchNo: $('#batchNo'),
-    productHint: $('#productHint'),
+    btnScan: $('#btnScan'),
     buckets: $$('input[data-bucket]'),
     zeroCount: $('#zeroCount'),
     perCase: $('#perCase'),
@@ -59,16 +52,12 @@ const el = {
     labelExtra: $('#labelExtra'),
     securityExtra: $('#securityExtra'),
     bottleWeight: $('#bottleWeight'),
-    bottleWeightMin: $('#bottleWeightMin'),
     boxNetWeight: $('#boxNetWeight'),
-    boxNetWeightMin: $('#boxNetWeightMin'),
     inboundCount: $('#inboundCount'),
     innerIssued: $('#innerIssued'),
     bucketCount: $('#bucketCount'),
     caseCountText: $('#caseCountText'),
     palletCode: $('#palletCode'),
-    statusOptions: $('#statusOptions'),
-    weightProductChip: $('#weightProductChip'),
     weightRange: $('#weightRange'),
     palletPageChip: $('#palletPageChip'),
     palletRange: $('#palletRange'),
@@ -91,6 +80,9 @@ const el = {
     confirmContent: $('#confirmContent'),
     confirmCancel: $('#confirmCancel'),
     confirmOk: $('#confirmOk'),
+    scanMask: $('#scanMask'),
+    scanVideo: $('#scanVideo'),
+    scanClose: $('#scanClose'),
     toast: $('#toast')
 }
 
@@ -106,10 +98,6 @@ function onlyDecimal(value) {
 
 function sanitizeBatchNo(value) {
     return String(value == null ? '' : value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)
-}
-
-function sanitizeProductCode(value) {
-    return String(value == null ? '' : value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10)
 }
 
 function isZeroValue(value) {
@@ -243,7 +231,6 @@ function render() {
     renderValue(el.palletCode, r.palletCode)
 
     el.weightRange.textContent = state.weightRange
-    el.weightProductChip.textContent = state.productCode || '未选择产品'
 
     el.palletPageChip.textContent = r.palletPage
     el.palletRange.textContent = r.palletRange || '暂无件号'
@@ -258,13 +245,8 @@ function render() {
         const name = node.getAttribute('data-used')
         const used = usedByName[name]
         node.textContent = used == null ? '0' : String(used)
-        // P2-1：实用列 0 值弱化为 muted，>0 才用主色
+        // 实用列 0 值弱化为 muted，>0 才用主色
         node.classList.toggle('zero-value', !used)
-    })
-
-    // 本批状态
-    Array.from(el.statusOptions.children).forEach(button => {
-        button.classList.toggle('active', button.getAttribute('data-status') === state.batchStatus)
     })
 
     // 托分页按钮
@@ -284,7 +266,6 @@ function recalc() {
 
 function syncInputs() {
     el.batchNo.value = state.batchNo
-    el.productCode.value = state.productCode
     el.buckets.forEach(input => {
         input.value = state.buckets[input.getAttribute('data-bucket')] || ''
     })
@@ -295,46 +276,13 @@ function syncInputs() {
     el.labelExtra.value = state.labelExtra
     el.securityExtra.value = state.securityExtra
     el.bottleWeight.value = state.bottleWeight
-    el.bottleWeightMin.value = state.bottleWeightMin
     el.boxNetWeight.value = state.boxNetWeight
-    el.boxNetWeightMin.value = state.boxNetWeightMin
     el.materials.forEach(input => {
         const name = input.getAttribute('data-material')
         const field = input.getAttribute('data-input')
         const material = state.materials.find(item => item.name === name)
         input.value = material ? (material[field] || '') : ''
     })
-}
-
-/* ---------------- 可选：本地产品参数（按产品编码回填空项） ---------------- */
-
-function applyLocalProduct() {
-    const code = state.productCode
-    if (!code) {
-        el.productHint.hidden = true
-        el.productHint.textContent = ''
-        return
-    }
-    const product = findProduct(code)
-    if (!product) {
-        el.productHint.hidden = true
-        el.productHint.textContent = ''
-        return
-    }
-    let filled = false
-    if (!state.perCase && product.perCase) {
-        state.perCase = String(product.perCase)
-        el.perCase.value = state.perCase
-        filled = true
-    }
-    if (!state.perPallet && product.perPallet) {
-        state.perPallet = String(product.perPallet)
-        el.perPallet.value = state.perPallet
-        filled = true
-    }
-    const text = '本机产品参数：瓶/件 ' + (product.perCase || '—') + ' · 件/托 ' + (product.perPallet || '—')
-    el.productHint.textContent = filled ? text + '（已填入空项）' : text
-    el.productHint.hidden = false
 }
 
 /* ---------------- 保存 / 历史 / 清空 ---------------- */
@@ -345,8 +293,6 @@ function buildRecord() {
         id: newRecordId(),
         savedAt: new Date().toISOString(),
         batchNo: state.batchNo,
-        productCode: state.productCode,
-        batchStatus: state.batchStatus,
         bottlePerCase: Number(state.perCase) || 0,
         casePerPallet: Number(state.perPallet) || 0,
         zeroCount: Number(state.zeroCount) || 0,
@@ -359,9 +305,7 @@ function buildRecord() {
         }, {}),
         weights: {
             bottleWeight: state.bottleWeight,
-            bottleWeightMin: state.bottleWeightMin,
-            boxNetWeight: state.boxNetWeight,
-            boxNetWeightMin: state.boxNetWeightMin
+            boxNetWeight: state.boxNetWeight
         },
         materialInputs: state.materials.reduce((acc, material) => {
             acc[material.name] = {
@@ -398,17 +342,11 @@ function saveCurrent() {
         showToast('保存失败：浏览器本地存储不可用')
         return
     }
-    if (state.productCode) {
-        saveProduct({ code: state.productCode, perCase: state.perCase, perPallet: state.perPallet })
-        applyLocalProduct()
-    }
     showToast('已保存到本机历史（共 ' + list.length + ' 条）')
 }
 
 function applyRecord(record) {
     state.batchNo = record.batchNo || ''
-    state.productCode = record.productCode || ''
-    state.batchStatus = record.batchStatus === 'complete' ? 'complete' : 'incomplete'
     state.perCase = record.bottlePerCase ? String(record.bottlePerCase) : ''
     state.perPallet = record.casePerPallet ? String(record.casePerPallet) : ''
     state.zeroCount = record.zeroCount ? String(record.zeroCount) : ''
@@ -417,9 +355,7 @@ function applyRecord(record) {
     state.securityExtra = record.securityExtra ? String(record.securityExtra) : ''
     const weights = record.weights || {}
     state.bottleWeight = weights.bottleWeight || ''
-    state.bottleWeightMin = weights.bottleWeightMin || ''
     state.boxNetWeight = weights.boxNetWeight || ''
-    state.boxNetWeightMin = weights.boxNetWeightMin || ''
     BUCKET_KEYS.forEach(key => {
         const value = record.buckets ? record.buckets[key] : ''
         state.buckets[key] = value ? String(value) : ''
@@ -439,12 +375,10 @@ function applyRecord(record) {
     }
     syncInputs()
     render()
-    applyLocalProduct()
 }
 
 function clearAll() {
     state.batchNo = ''
-    state.productCode = ''
     state.buckets = emptyBuckets()
     state.zeroCount = ''
     state.perCase = ''
@@ -453,24 +387,18 @@ function clearAll() {
     state.labelExtra = ''
     state.securityExtra = ''
     state.bottleWeight = ''
-    state.bottleWeightMin = ''
     state.boxNetWeight = ''
-    state.boxNetWeightMin = ''
-    state.batchStatus = 'incomplete'
     state.currentPallet = 1
     state.materials = []
     calculate()
     syncInputs()
     render()
-    el.productHint.hidden = true
-    el.productHint.textContent = ''
     showToast('已清空当前计算')
 }
 
 function historySummary(record) {
     const summary = record.summary || {}
     const parts = []
-    if (record.productCode) parts.push('产品 ' + record.productCode)
     if (summary.caseCountText) parts.push(summary.caseCountText)
     if (summary.inboundCount) parts.push(summary.inboundCount)
     if (summary.palletCode) parts.push(summary.palletCode)
@@ -571,14 +499,12 @@ function buildCopyText() {
     const r = state.calc
     const lines = ['MES 包材计算（本机）']
     if (state.batchNo) lines.push('批号：' + state.batchNo)
-    if (state.productCode) lines.push('产品编码：' + state.productCode)
     lines.push('瓶/件：' + (state.perCase || '—') + '　件/托：' + (state.perPallet || '—'))
     lines.push('每桶件数：' + BUCKET_KEYS.map(key => key + '=' + (state.buckets[key] || 0)).join(' '))
     lines.push('桶数：' + r.bucketCount + '　件数：' + r.caseCountText + '　瓶数：' + r.inboundCount)
     lines.push('托数：' + r.palletCode + '　件号：' + r.palletRange)
     lines.push('重量区间：' + state.weightRange)
     if (r.materials.length) lines.push('包材用量：' + r.materials.map(material => material.name + ' ' + material.used).join('；'))
-    lines.push('本批状态：' + (state.batchStatus === 'complete' ? '已完成' : '未完成'))
     return lines.join('\n')
 }
 
@@ -624,7 +550,6 @@ function buildCSV() {
     const r = state.calc
     const rows = [
         ['批号', state.batchNo],
-        ['产品编码', state.productCode],
         ['瓶/件', state.perCase],
         ['件/托', state.perPallet],
         ['每桶件数', BUCKET_KEYS.map(key => key + '=' + (state.buckets[key] || 0)).join(' ')],
@@ -636,7 +561,6 @@ function buildCSV() {
         ['托数', r.palletCode],
         ['件号', r.palletRange],
         ['重量区间', state.weightRange],
-        ['本批状态', state.batchStatus === 'complete' ? '已完成' : '未完成'],
         [],
         ['包材', '领用', '实用', '损耗', '退回']
     ]
@@ -681,6 +605,100 @@ function closeConfirm(result) {
     if (resolver) resolver(result)
 }
 
+/* ---------------- 扫码（浏览器原生 BarcodeDetector，零依赖） ---------------- */
+
+// 只接受常见一维码与二维码；BarcodeDetector.getSupportedFormats() 过滤后再构造
+const SCAN_FORMATS = ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'code_39', 'code_93', 'qr_code']
+const SCAN_INTERVAL_MS = 300
+
+let scanStream = null
+let scanDetector = null
+let scanTimer = null
+let scanRunning = false
+
+/** 扫码结果清洗：去空白/非字母数字、转大写、最多 12 位（与手填批号同一规则）。 */
+function cleanScannedCode(raw) {
+    return sanitizeBatchNo(raw)
+}
+
+function stopScanner() {
+    scanRunning = false
+    if (scanTimer) {
+        clearInterval(scanTimer)
+        scanTimer = null
+    }
+    if (scanStream) {
+        scanStream.getTracks().forEach(track => {
+            try { track.stop() } catch (error) { /* ignore */ }
+        })
+        scanStream = null
+    }
+    if (el.scanVideo) {
+        try { el.scanVideo.pause() } catch (error) { /* ignore */ }
+        el.scanVideo.srcObject = null
+    }
+    if (el.scanMask) el.scanMask.hidden = true
+}
+
+async function openScanner() {
+    if (scanRunning) return
+    const hasDetector = typeof window.BarcodeDetector === 'function'
+    const hasCamera = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function')
+    // 非安全上下文（http 域名）、浏览器无 BarcodeDetector、无相机 API：一律按不支持处理
+    if (!window.isSecureContext || !hasDetector || !hasCamera) {
+        showToast('当前浏览器不支持扫码，请手动输入')
+        return
+    }
+
+    try {
+        const supported = await window.BarcodeDetector.getSupportedFormats()
+        const formats = SCAN_FORMATS.filter(format => supported.indexOf(format) >= 0)
+        if (!formats.length) throw new Error('no supported barcode format')
+        scanDetector = new window.BarcodeDetector({ formats })
+    } catch (error) {
+        showToast('当前浏览器不支持扫码，请手动输入')
+        return
+    }
+
+    scanRunning = true
+    el.scanMask.hidden = false
+    try {
+        scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        if (!scanRunning) {
+            // 取流期间用户已关闭浮层
+            scanStream.getTracks().forEach(track => {
+                try { track.stop() } catch (error) { /* ignore */ }
+            })
+            scanStream = null
+            return
+        }
+        el.scanVideo.srcObject = scanStream
+        const played = el.scanVideo.play()
+        if (played && typeof played.catch === 'function') played.catch(() => { /* 自动播放失败不阻塞识别 */ })
+        scanTimer = setInterval(scanFrame, SCAN_INTERVAL_MS)
+    } catch (error) {
+        // 相机被拒 / 无摄像头 / 被系统占用：统一提示手动输入，不卡死
+        stopScanner()
+        showToast('当前浏览器不支持扫码，请手动输入')
+    }
+}
+
+async function scanFrame() {
+    if (!scanRunning || !scanDetector || !el.scanVideo) return
+    try {
+        const codes = await scanDetector.detect(el.scanVideo)
+        const raw = codes && codes.length ? String(codes[0].rawValue || '') : ''
+        const cleaned = cleanScannedCode(raw)
+        if (!cleaned) return
+        state.batchNo = cleaned
+        el.batchNo.value = cleaned
+        stopScanner()
+        showToast('已填入批号：' + cleaned)
+    } catch (error) {
+        // 单帧失败（无码/画面模糊）：继续下一帧
+    }
+}
+
 /* ---------------- 事件绑定 ---------------- */
 
 function bindNumberInput(input, key, options = {}) {
@@ -694,20 +712,14 @@ function bindNumberInput(input, key, options = {}) {
 }
 
 function bindEvents() {
-    // 批号 / 产品编码
+    // 批号 + 扫码
     el.batchNo.addEventListener('input', () => {
         const cleaned = sanitizeBatchNo(el.batchNo.value)
         if (el.batchNo.value !== cleaned) el.batchNo.value = cleaned
         state.batchNo = cleaned
     })
-    el.productCode.addEventListener('input', () => {
-        const cleaned = sanitizeProductCode(el.productCode.value)
-        if (el.productCode.value !== cleaned) el.productCode.value = cleaned
-        state.productCode = cleaned
-        el.weightProductChip.textContent = cleaned || '未选择产品'
-        applyLocalProduct()
-        recalc()
-    })
+    el.btnScan.addEventListener('click', openScanner)
+    el.scanClose.addEventListener('click', stopScanner)
 
     // 分桶 A–J
     el.buckets.forEach(input => {
@@ -727,9 +739,7 @@ function bindEvents() {
     bindNumberInput(el.labelExtra, 'labelExtra')
     bindNumberInput(el.securityExtra, 'securityExtra')
     bindNumberInput(el.bottleWeight, 'bottleWeight', { decimal: true })
-    bindNumberInput(el.bottleWeightMin, 'bottleWeightMin', { decimal: true })
     bindNumberInput(el.boxNetWeight, 'boxNetWeight', { decimal: true })
-    bindNumberInput(el.boxNetWeightMin, 'boxNetWeightMin', { decimal: true })
 
     // 包材明细：领用 / 损耗 / 退回（只记录，不参与自动计算）
     el.materials.forEach(input => {
@@ -743,19 +753,11 @@ function bindEvents() {
         })
     })
 
-    // 本批状态 seg
-    el.statusOptions.addEventListener('click', event => {
-        const button = event.target.closest('[data-status]')
-        if (!button) return
-        state.batchStatus = button.getAttribute('data-status') === 'complete' ? 'complete' : 'incomplete'
-        render()
-    })
-
     // 卡内三键
     el.btnSave.addEventListener('click', saveCurrent)
     el.btnHistory.addEventListener('click', openHistory)
     el.btnClear.addEventListener('click', async () => {
-        const hasInput = !!state.batchNo || !!state.productCode ||
+        const hasInput = !!state.batchNo ||
             Object.values(state.buckets).some(value => value) || !!state.perCase || !!state.perPallet
         if (!hasInput) {
             showToast('当前没有可清空的内容')
@@ -813,8 +815,14 @@ function bindEvents() {
     // Esc 关闭弹层
     document.addEventListener('keydown', event => {
         if (event.key !== 'Escape') return
+        if (!el.scanMask.hidden) { stopScanner(); return }
         if (!el.confirmMask.hidden) { closeConfirm(false); return }
         if (!el.historyMask.hidden) el.historyMask.hidden = true
+    })
+
+    // 页面切到后台/锁屏时立即释放相机
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopScanner()
     })
 }
 
@@ -825,7 +833,6 @@ function init() {
     calculate()
     syncInputs()
     render()
-    applyLocalProduct()
 }
 
 init()
