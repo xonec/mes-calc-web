@@ -26,7 +26,10 @@ mes-calc-web/
 ├── js/
 │   ├── calc.js           # 计算内核：公式与 mes-uniapp/utils/calc.js 同一份（computeMaterial / computeWeightRange；仅注释措辞按本页口径）
 │   ├── store.js          # localStorage：历史记录
-│   └── app.js            # 页面状态、渲染、扫码、保存/历史/复制/导出 + SW 注册/安装引导
+│   ├── app.js            # 页面状态、渲染、扫码、保存/历史/复制/导出 + SW 注册/安装引导
+│   └── vendor/
+│       ├── zxing.min.js      # ZXing 0.23.0 UMD（Apache-2.0），原生 BarcodeDetector 不可用时懒加载
+│       └── LICENSE-zxing.txt # ZXing 许可文本
 └── README.md
 ```
 
@@ -41,8 +44,17 @@ mes-calc-web/
 | 重量参数 | 单箱重量 / 单瓶重量 + 重量范围（自动） |
 | 托分页 | 件号、零箱（最后一托）、首托 / 上一托 / 下一托 / 尾托 |
 
-- **扫码**：批号右侧「扫码」打开全屏相机浮层，用浏览器原生 `BarcodeDetector` 逐帧识别（支持常见一维码与二维码），识别后清洗（去空白/非字母数字、转大写、最多 12 位）并回填批号，自动关闭浮层；不引第三方库、不上传图像。关闭浮层、按 Esc、页面切后台或锁屏会立即停止相机。
-- **扫码兼容性**：`BarcodeDetector` 目前主要由 Chrome / Edge / Android WebView 支持；Safari、Firefox 等不支持时点「扫码」只提示「当前浏览器不支持扫码，请手动输入」，手动输入不受影响。相机需要 HTTPS（或 `localhost`），相机被拒或无摄像头同样按不支持处理，不会卡死。
+- **扫码（双引擎）**：批号右侧「扫码」打开全屏相机浮层。优先用浏览器原生 `BarcodeDetector` 逐帧识别；不支持时（Safari / Firefox / 微信等）自动懒加载本地 ZXing（`js/vendor/zxing.min.js`，全局 `ZXing`，不联网、不引 npm 依赖）继续识别。识别后清洗（去空白/非字母数字、转大写、最多 12 位）并回填批号，自动关闭浮层；不截图、不上传图像。关闭浮层、按 Esc、页面切后台或锁屏会立即停止相机。
+- **相册兜底**：浮层底部「从相册选择图片」用 ZXing 解码本地图片；相机被拒/不可用时浮层切换为兜底面板，提示相册识别或手动输入。微信内置浏览器额外提示「可点右上角「…」在 Safari 中打开」。相机与相册识别均在本地完成，不上传图片。
+- **扫码兼容性**：
+
+| 环境 | 引擎 | 说明 |
+| --- | --- | --- |
+| Chrome / Edge / Android WebView | 原生 `BarcodeDetector` | 优先路径，识别速度快 |
+| iOS Safari / Firefox / 微信 | 本地 ZXing | 原生缺失时自动加载 vendor 文件；相机需 HTTPS/localhost 与授权 |
+| 相机不可用 | 相册识别 / 手动输入 | 浮层切兜底面板，不卡死 |
+
+ZXing 来源：`@zxing/library@0.23.0`（`umd/index.min.js`，362 KB / gzip≈108 KB，Apache-2.0），许可文本见 `js/vendor/LICENSE-zxing.txt`。
 - **历史记录**：按批号去重，最多 50 条；支持载入、删除、清空；存储键 `mes-calc-web:records:v1`。
 - **复制结果**：与 App 离线复制文案同一格式（批号/瓶件/件托/每桶件数/桶数/件数/瓶数/托数/件号/重量区间/包材用量）。
 - **导出 CSV**：UTF-8 BOM，Excel 直接打开不乱码；上半部分为单据信息，下半部分为包材明细。
@@ -87,7 +99,7 @@ mes-calc-web/
   - 保留页脚（版本说明 + PWA 安装引导；App 用原生导航栏标题）
   - 重量参数格统一为白格 + 描边（App 该卡还是旧灰格，走查 backlog 待统一，这里直接按统一口径实现）
   - 无拖拽排序（保留卡片折叠）；无智能填充、订单行、分享、离线提示条
-  - 有扫码（浏览器原生 BarcodeDetector，见上）
+  - 有扫码（原生 BarcodeDetector + 本地 ZXing 双引擎 + 相册兜底，见上）
 - 可点性与对比度（2026-11-02 界面走查后修订）：
   - 分桶格/尾格整体是 `<label>`：点格子任意位置（含四角与 label 区）都能聚焦对应输入；输入热区 88u（390 下 45.8px ≥44px），格高保持 112u、热区不出格
   - 只读值分段渲染：数字 44u 主色、单位 26u `--muted`；复合值统一「数字 空格 单位」写法，按「数字+单位」分段、只在 `+` 处分行；同排三格等高、label 顶部对齐（320/390 实测）
@@ -108,16 +120,16 @@ mes-calc-web/
 
 ### 离线能力
 
-`sw.js` 策略（改版时**手动改 `CACHE_VERSION`**，当前 `v2`；`activate` 会清理旧版本缓存）：
+`sw.js` 策略（改版时**手动改 `CACHE_VERSION`**，当前 `v5`；`activate` 会清理旧版本缓存）：
 
 | 请求 | 策略 |
 | --- | --- |
-| 安装/激活 | 预缓存 app shell：`./`、`index.html`、`css/style.css`、`js/app.js`、`js/calc.js`、`js/store.js`、`manifest.webmanifest`、4 个图标；`activate` 删除旧缓存并 `clients.claim()` |
+| 安装/激活 | 预缓存 app shell：`./`、`index.html`、`css/style.css`、`js/app.js`、`js/calc.js`、`js/store.js`、`js/vendor/zxing.min.js`（约 362 KB / gzip≈108 KB）、`manifest.webmanifest`、4 个图标；`activate` 删除旧缓存并 `clients.claim()` |
 | 导航（打开页面） | network-first，失败回退缓存的 `index.html`（断网仍能打开） |
 | 其他同源 GET（CSS/JS/图标/manifest） | cache-first，缺失时请求并回填缓存 |
 | 跨域 / 非 GET | 直接放行，不缓存、不产生额外请求 |
 
-因此首次在线访问后断网，重新打开页面仍可计算、可读写 `localStorage` 历史；页面不发任何外部请求。
+因此首次在线访问后断网，重新打开页面仍可计算、可读写 `localStorage` 历史；相册扫码同样可用（ZXing 已随 app shell 缓存）；页面不发任何外部请求。
 
 ### 部署要求
 
@@ -125,10 +137,18 @@ mes-calc-web/
 - 托管需为 `.webmanifest` 返回 `application/manifest+json`（GitHub Pages 可直接用；国内托管若返回 `application/octet-stream`，需在 Nginx/对象存储里补 MIME）。
 - 部署在子路径（如 `/mes-calc-web/`）或域名根都可：`start_url`/`scope` 为相对 `./`，SW 以自身目录为 scope。
 
+### 发布检查清单（国内静态托管必做）
+
+- 每次发布同步更新版本串 `BUILD`：`index.html` 的资源引用、`js/app.js` 的 SW 注册与 ZXing URL、`sw.js` 的 `BUILD` 与 `CACHE_VERSION`（本次为 `20261121a` / `v5`）。资源 URL 变了，CDN 才会回源，否则可能命中陈旧的压缩副本。
+- 上传**整包**（含 `js/vendor/zxing.min.js`），不要只传 `index.html`：HTML 与 JS 版本错配会让页面静默失效。
+- 上传后在 CDN 控制台刷新 `/` 与 `/index.html` 的全部副本（含 gzip/br 压缩副本）。CDN 会按 `Accept-Encoding` 分缓存，仅用 curl 无压缩头验证可能拿到旧版 HTML 而误判。
+- 用**真实浏览器**验收：页面顶部不应出现红色「页面脚本未正常启动」横幅；填 A桶=10、B桶=5、瓶/件=24、件/托=20，入库瓶数应为 360 瓶、件数 15 件、托码 0 托 + 15 件；控制台无 JS 异常。
+- `index.html` 里的 `<meta name="app-build">` 可用于快速确认入口是否是新版本。
+
 ## 数据与隐私
 
 - 全部数据（历史记录）只写入当前浏览器的 `localStorage`，不发任何网络请求。
-- 扫码在浏览器本地识别，不截图、不上传任何图像。
+- 扫码（相机/相册）在浏览器本地用原生接口或本地 ZXing 识别，不截图、不上传任何图像、不请求任何外部资源。
 - 清除浏览器站点数据即彻底删除；换设备/换浏览器不共享。
 - 批号只作展示与历史记录，不关联任何云端订单或人员数据。
 

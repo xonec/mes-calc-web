@@ -963,6 +963,61 @@ button {
     pointer-events: none;
 }
 
+.scan-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(16 * var(--u));
+    padding: calc(48 * var(--u)) calc(40 * var(--u));
+    text-align: center;
+    background: #101412;
+}
+
+.scan-fallback-title {
+    margin: 0;
+    font-size: calc(34 * var(--u));
+    font-weight: 700;
+}
+
+.scan-fallback-text,
+.scan-fallback-wechat {
+    margin: 0;
+    font-size: calc(26 * var(--u));
+    line-height: 1.6;
+    color: rgba(255, 255, 255, .86);
+}
+
+.scan-fallback-wechat {
+    color: rgba(255, 214, 130, .92);
+}
+
+.scan-actions {
+    display: flex;
+    justify-content: center;
+    padding: calc(14 * var(--u)) calc(24 * var(--u)) 0;
+    background: rgba(16, 20, 18, .92);
+}
+
+.scan-gallery {
+    height: calc(72 * var(--u));
+    padding: 0 calc(32 * var(--u));
+    border-radius: calc(36 * var(--u));
+    font-size: calc(28 * var(--u));
+    color: var(--surface);
+    background: rgba(255, 255, 255, .16);
+}
+
+.scan-gallery:active {
+    opacity: .8;
+}
+
+.scan-file {
+    display: none;
+}
+
 .scan-hint {
     margin: 0;
     padding: calc(14 * var(--u)) calc(24 * var(--u)) calc(18 * var(--u) + env(safe-area-inset-bottom));
@@ -1063,4 +1118,19 @@ button {
     color: var(--muted);
     font-size: calc(30 * var(--u));
     line-height: 1;
+}
+
+/* ---------- 启动看门狗告警（脚本未启动 / 版本错配） ---------- */
+.boot-error {
+    position: relative;
+    z-index: 9999;
+    margin: 0 auto calc(12 * var(--u));
+    max-width: 750px;
+    padding: calc(14 * var(--u)) calc(16 * var(--u));
+    border: 1px solid #E7B3AE;
+    border-radius: calc(12 * var(--u));
+    background: #FDECEA;
+    color: #8C211C;
+    font-size: calc(24 * var(--u));
+    line-height: 1.5;
 }

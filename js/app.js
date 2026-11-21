@@ -83,8 +83,37 @@ const el = {
     scanMask: $('#scanMask'),
     scanVideo: $('#scanVideo'),
     scanClose: $('#scanClose'),
+    scanFallback: $('#scanFallback'),
+    scanFallbackText: $('#scanFallbackText'),
+    scanFallbackWechat: $('#scanFallbackWechat'),
+    scanGalleryBtn: $('#scanGalleryBtn'),
+    scanFile: $('#scanFile'),
+    scanHint: $('#scanHint'),
     toast: $('#toast')
 }
+
+/* ---------------- DOM 契约兜底（HTML 与 JS 版本错配时优雅降级） ----------------
+   CDN 可能只刷新了 index.html、没刷新 JS（或反之）。此时缺失的 DOM 节点会让
+   init() 整体抛错，页面看起来正常但全部计算失效。这里给缺失节点补哑节点，
+   让无关功能继续可用，并在控制台列出降级项。 */
+function missingNodeStub() {
+    return {
+        value: '', textContent: '', hidden: true, srcObject: null, disabled: false,
+        classList: { toggle() {}, add() {}, remove() {}, contains() { return false } },
+        addEventListener() {}, removeEventListener() {}, setAttribute() {},
+        getAttribute() { return '' }, querySelector() { return null },
+        replaceChildren() {}, appendChild() {}, append() {}, focus() {},
+        pause() {}, play() { return Promise.resolve() }, closest() { return null },
+        click() {}, select() {}
+    }
+}
+const missingNodes = []
+Object.keys(el).forEach(key => {
+    if (el[key] == null) {
+        el[key] = missingNodeStub()
+        missingNodes.push(key)
+    }
+})
 
 /* ---------------- 工具函数 ---------------- */
 
@@ -605,28 +634,71 @@ function closeConfirm(result) {
     if (resolver) resolver(result)
 }
 
-/* ---------------- 扫码（浏览器原生 BarcodeDetector，零依赖） ---------------- */
+/* ---------------- 扫码（原生 BarcodeDetector 优先，缺失时懒加载本地 ZXing；相册兜底） ---------------- */
 
-// 只接受常见一维码与二维码；BarcodeDetector.getSupportedFormats() 过滤后再构造
+// 原生 BarcodeDetector 只接受这些格式（构造前用 getSupportedFormats 过滤）
 const SCAN_FORMATS = ['code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar', 'code_39', 'code_93', 'qr_code']
+// 本地 ZXing 的格式枚举（与上面一一对应）
+const ZXING_FORMATS = ['CODE_128', 'EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'ITF', 'CODABAR', 'CODE_39', 'CODE_93', 'QR_CODE']
 const SCAN_INTERVAL_MS = 300
+const ZXING_VENDOR_URL = 'js/vendor/zxing.min.js?v=20261121a'
 
 let scanStream = null
 let scanDetector = null
 let scanTimer = null
 let scanRunning = false
+let scanEngine = null        // 'native' | 'zxing'
+let scanBusy = false         // ZXing 单帧解码去重
+let zxingLib = null
+let zxingReader = null
+let zxingLoading = null
+
+function isWechatBrowser() {
+    return /MicroMessenger/i.test(navigator.userAgent || '')
+}
 
 /** 扫码结果清洗：去空白/非字母数字、转大写、最多 12 位（与手填批号同一规则）。 */
 function cleanScannedCode(raw) {
     return sanitizeBatchNo(raw)
 }
 
-function stopScanner() {
-    scanRunning = false
-    if (scanTimer) {
-        clearInterval(scanTimer)
-        scanTimer = null
+/** 懒加载本地 ZXing（UMD，全局 ZXing），只加载一次；失败后允许重试。 */
+function loadZXing() {
+    if (zxingLib) return Promise.resolve(zxingLib)
+    if (zxingLoading) return zxingLoading
+    zxingLoading = new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = ZXING_VENDOR_URL
+        script.async = true
+        script.onload = () => resolve()
+        script.onerror = () => reject(new Error('zxing load failed'))
+        document.head.appendChild(script)
+    }).then(() => {
+        if (!window.ZXing) throw new Error('zxing global missing')
+        zxingLib = window.ZXing
+        return zxingLib
+    }).catch(error => {
+        zxingLoading = null
+        throw error
+    })
+    return zxingLoading
+}
+
+function getZXingReader() {
+    if (!zxingLib) return null
+    if (!zxingReader) {
+        const hints = new Map()
+        const formats = ZXING_FORMATS
+            .map(name => zxingLib.BarcodeFormat && zxingLib.BarcodeFormat[name])
+            .filter(value => value != null)
+        if (formats.length) hints.set(zxingLib.DecodeHintType.POSSIBLE_FORMATS, formats)
+        hints.set(zxingLib.DecodeHintType.TRY_HARDER, true)
+        zxingReader = new zxingLib.BrowserMultiFormatReader(hints)
     }
+    return zxingReader
+}
+
+function releaseCamera() {
     if (scanStream) {
         scanStream.getTracks().forEach(track => {
             try { track.stop() } catch (error) { /* ignore */ }
@@ -637,67 +709,192 @@ function stopScanner() {
         try { el.scanVideo.pause() } catch (error) { /* ignore */ }
         el.scanVideo.srcObject = null
     }
+}
+
+function scanFrameElement() {
+    return el.scanMask ? el.scanMask.querySelector('.scan-frame') : null
+}
+
+function resetScanUi() {
+    if (el.scanFallback) el.scanFallback.hidden = true
+    if (el.scanFallbackWechat) el.scanFallbackWechat.hidden = true
+    if (el.scanVideo) el.scanVideo.hidden = false
+    const frame = scanFrameElement()
+    if (frame) frame.hidden = false
+    if (el.scanGalleryBtn) el.scanGalleryBtn.hidden = false
+    if (el.scanHint) el.scanHint.textContent = '将条形码 / 二维码放入取景框，识别成功后自动填入批号'
+}
+
+function stopScanner() {
+    scanRunning = false
+    scanEngine = null
+    scanBusy = false
+    if (scanTimer) {
+        clearInterval(scanTimer)
+        scanTimer = null
+    }
+    if (zxingReader) {
+        try { zxingReader.reset() } catch (error) { /* ignore */ }
+    }
+    releaseCamera()
+    resetScanUi()
     if (el.scanMask) el.scanMask.hidden = true
 }
 
-async function openScanner() {
-    if (scanRunning) return
-    const hasDetector = typeof window.BarcodeDetector === 'function'
-    const hasCamera = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function')
-    // 非安全上下文（http 域名）、浏览器无 BarcodeDetector、无相机 API：一律按不支持处理
-    if (!window.isSecureContext || !hasDetector || !hasCamera) {
-        showToast('当前浏览器不支持扫码，请手动输入')
-        return
+/** 相机/引擎不可用时切到兜底面板：相册识别 + 手动输入提示。 */
+function showScanFallback(message, options = {}) {
+    releaseCamera()
+    if (scanTimer) {
+        clearInterval(scanTimer)
+        scanTimer = null
     }
-
-    try {
-        const supported = await window.BarcodeDetector.getSupportedFormats()
-        const formats = SCAN_FORMATS.filter(format => supported.indexOf(format) >= 0)
-        if (!formats.length) throw new Error('no supported barcode format')
-        scanDetector = new window.BarcodeDetector({ formats })
-    } catch (error) {
-        showToast('当前浏览器不支持扫码，请手动输入')
-        return
-    }
-
-    scanRunning = true
-    el.scanMask.hidden = false
-    try {
-        scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
-        if (!scanRunning) {
-            // 取流期间用户已关闭浮层
-            scanStream.getTracks().forEach(track => {
-                try { track.stop() } catch (error) { /* ignore */ }
-            })
-            scanStream = null
-            return
-        }
-        el.scanVideo.srcObject = scanStream
-        const played = el.scanVideo.play()
-        if (played && typeof played.catch === 'function') played.catch(() => { /* 自动播放失败不阻塞识别 */ })
-        scanTimer = setInterval(scanFrame, SCAN_INTERVAL_MS)
-    } catch (error) {
-        // 相机被拒 / 无摄像头 / 被系统占用：统一提示手动输入，不卡死
-        stopScanner()
-        showToast('当前浏览器不支持扫码，请手动输入')
+    scanEngine = null
+    if (!el.scanMask || el.scanMask.hidden) return
+    if (el.scanFallback) el.scanFallback.hidden = false
+    if (el.scanVideo) el.scanVideo.hidden = true
+    const frame = scanFrameElement()
+    if (frame) frame.hidden = true
+    if (el.scanFallbackText) el.scanFallbackText.textContent = message
+    if (el.scanFallbackWechat) el.scanFallbackWechat.hidden = !(options.wechatHint && isWechatBrowser())
+    if (el.scanGalleryBtn) el.scanGalleryBtn.hidden = !!options.hideGallery
+    if (el.scanHint) {
+        el.scanHint.textContent = options.hideGallery
+            ? '请关闭浮层后手动输入批号'
+            : '可点「从相册选择图片」识别，或关闭浮层后手动输入批号'
     }
 }
 
-async function scanFrame() {
+function handleScanText(raw) {
+    const cleaned = cleanScannedCode(raw)
+    if (!cleaned) return false
+    state.batchNo = cleaned
+    el.batchNo.value = cleaned
+    stopScanner()
+    showToast('已填入批号：' + cleaned)
+    return true
+}
+
+function scanTick() {
+    if (!scanRunning) return
+    if (scanEngine === 'native') nativeScanTick()
+    else if (scanEngine === 'zxing') zxingScanTick()
+}
+
+async function nativeScanTick() {
     if (!scanRunning || !scanDetector || !el.scanVideo) return
     try {
         const codes = await scanDetector.detect(el.scanVideo)
         const raw = codes && codes.length ? String(codes[0].rawValue || '') : ''
-        const cleaned = cleanScannedCode(raw)
-        if (!cleaned) return
-        state.batchNo = cleaned
-        el.batchNo.value = cleaned
-        stopScanner()
-        showToast('已填入批号：' + cleaned)
+        if (raw) handleScanText(raw)
     } catch (error) {
         // 单帧失败（无码/画面模糊）：继续下一帧
     }
 }
+
+async function zxingScanTick() {
+    if (!scanRunning || !zxingReader || !el.scanVideo || scanBusy) return
+    scanBusy = true
+    try {
+        const result = await zxingReader.decodeFromVideoElement(el.scanVideo)
+        const raw = result && typeof result.getText === 'function' ? result.getText() : ''
+        if (raw && scanRunning) handleScanText(raw)
+    } catch (error) {
+        // NotFoundException 等逐帧失败：继续下一帧
+    } finally {
+        scanBusy = false
+    }
+}
+
+async function openScanner() {
+    if (scanRunning) return
+    if (!el.scanMask) return
+    scanRunning = true
+    scanEngine = null
+    scanBusy = false
+    resetScanUi()
+    el.scanMask.hidden = false
+
+    const hasCamera = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function')
+    if (!window.isSecureContext || !hasCamera) {
+        showScanFallback('当前环境无法调用相机（需要 HTTPS 或 localhost，且浏览器支持摄像头）。', { wechatHint: true })
+        return
+    }
+
+    // 1) 先开相机：ZXing 组件加载期间也能看到取景画面
+    try {
+        scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        if (!scanRunning) { releaseCamera(); return }
+        el.scanVideo.srcObject = scanStream
+        const played = el.scanVideo.play()
+        if (played && typeof played.catch === 'function') played.catch(() => { /* 自动播放失败不阻塞识别 */ })
+    } catch (error) {
+        showScanFallback('相机不可用（可能被拒绝、无摄像头或已被其他应用占用）。', { wechatHint: true })
+        return
+    }
+
+    // 2) 引擎选择：原生 BarcodeDetector 优先；不支持时懒加载本地 ZXing
+    if (typeof window.BarcodeDetector === 'function') {
+        try {
+            const supported = await window.BarcodeDetector.getSupportedFormats()
+            const formats = SCAN_FORMATS.filter(format => supported.indexOf(format) >= 0)
+            if (!formats.length) throw new Error('no supported barcode format')
+            scanDetector = new window.BarcodeDetector({ formats })
+            scanEngine = 'native'
+        } catch (error) {
+            scanDetector = null
+        }
+    }
+    if (!scanEngine) {
+        if (el.scanHint) el.scanHint.textContent = '正在加载扫码组件…'
+        try {
+            await loadZXing()
+        } catch (error) {
+            showScanFallback('扫码组件加载失败，无法识别条码。', { wechatHint: true })
+            return
+        }
+        if (!scanRunning) return
+        getZXingReader()
+        scanEngine = 'zxing'
+        if (el.scanHint) el.scanHint.textContent = '将条形码 / 二维码放入取景框，识别成功后自动填入批号'
+    }
+    scanTimer = setInterval(scanTick, SCAN_INTERVAL_MS)
+}
+
+function pickGalleryImage() {
+    if (!el.scanFile) return
+    el.scanFile.value = ''
+    el.scanFile.click()
+}
+
+function loadImageElement(url) {
+    return new Promise((resolve, reject) => {
+        const image = new Image()
+        image.onload = () => resolve(image)
+        image.onerror = () => reject(new Error('image load failed'))
+        image.src = url
+    })
+}
+
+async function handleGalleryFile(event) {
+    const input = event.target
+    const file = input && input.files && input.files[0]
+    if (!file) return
+    let objectUrl = ''
+    try {
+        await loadZXing()
+        objectUrl = URL.createObjectURL(file)
+        const image = await loadImageElement(objectUrl)
+        const result = await getZXingReader().decodeFromImageElement(image)
+        const raw = result && typeof result.getText === 'function' ? result.getText() : ''
+        if (!handleScanText(raw)) throw new Error('empty barcode')
+    } catch (error) {
+        showToast('未能识别图片中的条码，请换一张清晰的条码图或手动输入')
+    } finally {
+        if (objectUrl) URL.revokeObjectURL(objectUrl)
+        if (input) input.value = ''
+    }
+}
+
 
 /* ---------------- 事件绑定 ---------------- */
 
@@ -720,6 +917,8 @@ function bindEvents() {
     })
     el.btnScan.addEventListener('click', openScanner)
     el.scanClose.addEventListener('click', stopScanner)
+    el.scanGalleryBtn.addEventListener('click', pickGalleryImage)
+    el.scanFile.addEventListener('change', handleGalleryFile)
 
     // 分桶 A–J
     el.buckets.forEach(input => {
@@ -833,6 +1032,19 @@ function init() {
     calculate()
     syncInputs()
     render()
+    // 供 index.html 的启动看门狗判定：只有完整跑完初始化才算可用
+    window.__MES_APP_OK__ = true
+    if (missingNodes.length) {
+        console.warn('[MES] 页面缺少节点，相关功能已降级：' + missingNodes.join(', '))
+        var banner = document.createElement('div')
+        banner.setAttribute('role', 'alert')
+        banner.style.cssText = 'position:relative;z-index:9999;max-width:750px;margin:0 auto 12px;'
+            + 'padding:12px 16px;background:#FFF4D6;color:#7A5200;border:1px solid #E6C879;'
+            + 'font-size:14px;line-height:1.5'
+        banner.textContent = '资源版本不匹配：页面与脚本不是同一版本（缺少 ' + missingNodes.length
+            + ' 个组件），扫码等功能不可用。请刷新 CDN 缓存后重试。'
+        document.body.insertBefore(banner, document.body.firstChild)
+    }
 }
 
 init()
@@ -845,7 +1057,7 @@ function registerServiceWorker() {
     const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].indexOf(location.hostname) >= 0
     const isSecure = window.isSecureContext || location.protocol === 'https:' || isLocalhost
     if (!isSecure) return
-    navigator.serviceWorker.register('./sw.js').catch(() => {
+    navigator.serviceWorker.register('./sw.js?v=20261121a').catch(() => {
         // SW 不可用时页面照常计算，不打扰用户
     })
 }

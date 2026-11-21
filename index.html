@@ -10,11 +10,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="包材计算">
     <meta name="description" content="MES 包材计算：本地纯前端计算包材用量、托数与重量范围，数据只保存在本机浏览器。">
+    <meta name="app-build" content="20261121a">
     <title>MES 包材计算</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23008577'/%3E%3Ctext x='32' y='43' font-size='30' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E%E5%8C%85%3C/text%3E%3C/svg%3E">
-    <link rel="manifest" href="manifest.webmanifest">
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.webmanifest?v=20261121a">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png?v=20261121a">
+    <link rel="stylesheet" href="css/style.css?v=20261121a">
 </head>
 
 <body>
@@ -260,7 +261,7 @@
         </footer>
     </div>
 
-    <!-- 扫码浮层（相机 + 条码识别） -->
+    <!-- 扫码浮层（相机 + 双引擎条码识别 + 相册兜底） -->
     <div class="scan-mask" id="scanMask" hidden>
         <div class="scan-head">
             <h2 class="scan-title" id="scanTitle">扫描批号条码</h2>
@@ -269,8 +270,17 @@
         <div class="scan-view">
             <video class="scan-video" id="scanVideo" playsinline muted></video>
             <div class="scan-frame" aria-hidden="true"></div>
+            <div class="scan-fallback" id="scanFallback" hidden>
+                <p class="scan-fallback-title">相机不可用</p>
+                <p class="scan-fallback-text" id="scanFallbackText">可点下方「从相册选择图片」识别，或关闭浮层后手动输入批号。</p>
+                <p class="scan-fallback-wechat" id="scanFallbackWechat" hidden>微信内相机可能被限制：可点右上角「…」选择「在 Safari 中打开」，或从相册选图 / 手动输入。</p>
+            </div>
         </div>
-        <p class="scan-hint">将条形码 / 二维码放入取景框，识别成功后自动填入批号</p>
+        <div class="scan-actions">
+            <button class="scan-gallery" id="scanGalleryBtn" type="button">从相册选择图片</button>
+        </div>
+        <p class="scan-hint" id="scanHint">将条形码 / 二维码放入取景框，识别成功后自动填入批号</p>
+        <input class="scan-file" id="scanFile" type="file" accept="image/*" hidden>
     </div>
 
     <!-- 历史记录弹层 -->
@@ -305,7 +315,27 @@
         <p class="noscript">此页面需要启用 JavaScript 才能计算包材用量。</p>
     </noscript>
 
-    <script type="module" src="js/app.js"></script>
+        <script type="module" src="js/app.js?v=20261121a"></script>
+    <script>
+        /* 启动看门狗：模块脚本未成功启动（404 / 语法错误 / HTML 与 JS 版本错配）时明确告警，
+           避免页面看起来正常、但所有输入与计算都已失效。成功启动由 js/app.js 置位。 */
+        (function () {
+            function check() {
+                if (window.__MES_APP_OK__) return
+                if (document.querySelector(".boot-error")) return
+                var box = document.createElement("div")
+                box.className = "boot-error"
+                box.setAttribute("role", "alert")
+                box.style.cssText = "position:relative;z-index:9999;max-width:750px;margin:0 auto 12px;"
+                    + "padding:12px 16px;background:#FDECEA;color:#8C211C;border:1px solid #E7B3AE;"
+                    + "font-size:14px;line-height:1.5"
+                box.textContent = "页面脚本未正常启动：资源版本可能不匹配（CDN 缓存），当前计算结果不可用。请刷新 CDN 缓存或强制刷新后重试。"
+                document.body.insertBefore(box, document.body.firstChild)
+            }
+            if (document.readyState === "complete") setTimeout(check, 1600)
+            else window.addEventListener("load", function () { setTimeout(check, 1600) })
+        })()
+    </script>
 </body>
 
 </html>
