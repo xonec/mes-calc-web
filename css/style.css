@@ -576,6 +576,11 @@ button {
     text-align: right;
 }
 
+/* 自动补算的格子：muted 轻微区分，不改变版式与字号 */
+.table .cell-input[data-auto="1"] {
+    color: var(--muted);
+}
+
 .used {
     background: var(--canvas);
 }

@@ -206,6 +206,59 @@ function showToast(message) {
     toastTimer = setTimeout(() => { el.toast.hidden = true }, 2400)
 }
 
+/* ---------------- 包材三格补算（领用 = 实用 + 损耗 + 退回） ---------------- */
+
+const MATERIAL_FIELDS = ['issued', 'loss', 'returned']
+
+function materialNumber(value) {
+    if (value === '' || value == null) return null
+    const number = Number(value)
+    return Number.isFinite(number) ? number : null
+}
+
+// 按另外两格与「实用」补算第三格；负数/非法结果返回 null（留空，不静默改 0）
+function computeMaterialAutoValue(material, field) {
+    const used = Number(material.used) || 0
+    const issued = materialNumber(material.issued)
+    const loss = materialNumber(material.loss)
+    const returned = materialNumber(material.returned)
+    let value = null
+    if (field === 'issued' && loss != null && returned != null) value = used + loss + returned
+    else if (field === 'loss' && issued != null && returned != null) value = issued - used - returned
+    else if (field === 'returned' && issued != null && loss != null) value = issued - used - loss
+    return Number.isInteger(value) && value >= 0 ? value : null
+}
+
+function fillMaterialAuto(material, field) {
+    const value = computeMaterialAutoValue(material, field)
+    material.auto = field
+    material[field] = value == null ? '' : String(value)
+}
+
+// 「实用」变化或其它手填格改动后：自动格未被用户接管时按最新值重算
+function recomputeMaterialAuto(material) {
+    if (!material.auto) return
+    const otherFields = MATERIAL_FIELDS.filter(field => field !== material.auto)
+    if (otherFields.some(field => materialNumber(material[field]) == null)) return
+    fillMaterialAuto(material, material.auto)
+}
+
+function recomputeAllMaterialAuto() {
+    state.materials.forEach(recomputeMaterialAuto)
+}
+
+function syncMaterialInputs() {
+    el.materials.forEach(input => {
+        const name = input.getAttribute('data-material')
+        const field = input.getAttribute('data-input')
+        const material = state.materials.find(item => item.name === name)
+        const value = material ? (material[field] || '') : ''
+        if (input.value !== value) input.value = value
+        if (material && material.auto === field && value !== '') input.setAttribute('data-auto', '1')
+        else input.removeAttribute('data-auto')
+    })
+}
+
 /* ---------------- 计算与渲染 ---------------- */
 
 function calculate() {
@@ -225,13 +278,14 @@ function calculate() {
     state.currentPallet = result.currentPallet
     state.calc = result
 
-    // 重建包材行时保留手填的 领用/损耗/退回（按包材名匹配，同 App）
+    // 重建包材行时保留手填的 领用/损耗/退回 与「自动格」来源（按包材名匹配，同 App）
     const previous = {}
     state.materials.forEach(material => {
         previous[material.name] = {
             issued: material.issued,
             loss: material.loss,
-            returned: material.returned
+            returned: material.returned,
+            auto: material.auto || null
         }
     })
     state.materials = result.materials.map(item => {
@@ -241,9 +295,12 @@ function calculate() {
             used: item.used,
             issued: manual.issued || '',
             loss: manual.loss || '',
-            returned: manual.returned || ''
+            returned: manual.returned || '',
+            auto: manual.auto || null
         }
     })
+    // 「实用」变了：自动格没被用户接管就重算
+    recomputeAllMaterialAuto()
 
     state.weightRange = computeWeightRange(state.bottleWeight, state.boxNetWeight)
     return result
@@ -284,6 +341,9 @@ function render() {
         if (action === 'first' || action === 'prev') button.disabled = r.currentPallet <= 1
         else button.disabled = r.currentPallet >= r.totalPallets
     })
+
+    // 包材补算后同步输入框（含自动格标记）
+    syncMaterialInputs()
 }
 
 function recalc() {
@@ -402,6 +462,8 @@ function applyRecord(record) {
             material.returned = input.returned ? String(input.returned) : ''
         })
     }
+    // 历史/CSV 里的补算值按普通值保存：载入后不再重新推导
+    state.materials.forEach(material => { material.auto = null })
     syncInputs()
     render()
 }
@@ -940,7 +1002,7 @@ function bindEvents() {
     bindNumberInput(el.bottleWeight, 'bottleWeight', { decimal: true })
     bindNumberInput(el.boxNetWeight, 'boxNetWeight', { decimal: true })
 
-    // 包材明细：领用 / 损耗 / 退回（只记录，不参与自动计算）
+    // 包材明细：领用 / 损耗 / 退回（三格填任意两格，第三格自动补算）
     el.materials.forEach(input => {
         const name = input.getAttribute('data-material')
         const field = input.getAttribute('data-input')
@@ -948,7 +1010,24 @@ function bindEvents() {
             const cleaned = onlyDigits(input.value)
             if (input.value !== cleaned) input.value = cleaned
             const material = state.materials.find(item => item.name === name)
-            if (material) material[field] = cleaned
+            if (!material) return
+            const wasAuto = material.auto === field
+            material[field] = cleaned
+            if (cleaned === '') {
+                // 用户清空（含自动格）：允许为空，等其它格再改动时补算
+                if (wasAuto) material.auto = null
+                syncMaterialInputs()
+                return
+            }
+            // 手动编辑自动格 → 转手填，不再被覆盖
+            if (wasAuto) material.auto = null
+            const filled = MATERIAL_FIELDS.filter(item => material[item] !== '' && material[item] != null)
+            if (filled.length === 2) {
+                fillMaterialAuto(material, MATERIAL_FIELDS.find(item => filled.indexOf(item) < 0))
+            } else if (filled.length === 3 && material.auto) {
+                recomputeMaterialAuto(material)
+            }
+            syncMaterialInputs()
         })
     })
 
